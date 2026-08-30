@@ -24,23 +24,21 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Setup MSYS2 / Clang64
+    - name: Setup MSYS2 / MinGW64 GCC
       uses: msys2/setup-msys2@v2
       with:
-        msystem: clang64
+        msystem: mingw64
         update: true
         install: >-
-          mingw-w64-clang-x86_64-toolchain
-          mingw-w64-clang-x86_64-lld
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-binutils
           make
           git
 
-    - name: Fix libnt pointer type error
+    - name: Fix libnt pointer type warning
       run: |
-        # 修复 SymGetLineFromAddr64 参数类型不匹配问题
+        # 修复 SymGetLineFromAddr64 参数类型，消除指针不兼容警告
         sed -i 's/DWORD64 dldisp/DWORD dldisp/g' libnt/libnt.c
-        # 禁用多余的格式警告，保持构建输出干净
-        sed -i 's/-Wno-deprecated-non-prototype/-Wno-deprecated-non-prototype -Wno-format -Wno-incompatible-pointer-types/g' Makefile
 
     - name: Build
       run: |
@@ -50,10 +48,6 @@ jobs:
       run: |
         mkdir -p release
         cp out/magiskboot.exe release/
-        # 附带依赖 DLL（静态编译可删除此段）
-        if [ -d "out/obj/lib/shared" ]; then
-          cp out/obj/lib/shared/*.dll release/ 2>/dev/null || true
-        fi
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
