@@ -1,0 +1,62 @@
+name: Build MagiskBoot
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
+
+    - name: Setup MSYS2 / Clang64
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: clang64
+        update: true
+        install: >-
+          mingw-w64-clang-x86_64-toolchain
+          mingw-w64-clang-x86_64-lld
+          make
+          git
+
+    - name: Build
+      run: |
+        mingw32-make
+
+    - name: Collect artifacts
+      run: |
+        mkdir -p release
+        cp out/magiskboot.exe release/
+        # 如果需要附带依赖 DLL（非静态编译时）
+        if [ -d "out/obj/lib/shared" ]; then
+          cp out/obj/lib/shared/*.dll release/ 2>/dev/null || true
+        fi
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: magiskboot-windows-x64
+        path: release/*
+
+    - name: Create release on tag
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: release/*
+        generate_release_notes: true
