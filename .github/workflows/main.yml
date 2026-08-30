@@ -35,6 +35,13 @@ jobs:
           make
           git
 
+    - name: Fix libnt pointer type error
+      run: |
+        # 修复 SymGetLineFromAddr64 参数类型不匹配问题
+        sed -i 's/DWORD64 dldisp/DWORD dldisp/g' libnt/libnt.c
+        # 禁用多余的格式警告，保持构建输出干净
+        sed -i 's/-Wno-deprecated-non-prototype/-Wno-deprecated-non-prototype -Wno-format -Wno-incompatible-pointer-types/g' Makefile
+
     - name: Build
       run: |
         mingw32-make
@@ -43,7 +50,7 @@ jobs:
       run: |
         mkdir -p release
         cp out/magiskboot.exe release/
-        # 如果需要附带依赖 DLL（非静态编译时）
+        # 附带依赖 DLL（静态编译可删除此段）
         if [ -d "out/obj/lib/shared" ]; then
           cp out/obj/lib/shared/*.dll release/ 2>/dev/null || true
         fi
