@@ -1,65 +1,60 @@
-name: Build magiskboot
+name: Build MagiskBoot
 
 on:
   push:
-    branches: [ "**" ]
+    branches: [ "main", "master" ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
   pull_request:
-    branches: [ "**" ]
-  workflow_dispatch:  # 允许手动触发
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout source
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
 
-      - name: Set up Android NDK
-        uses: android-ndk/ndk-setup@v1
-        with:
-          ndk-version: r25c  # 可根据项目需求调整 NDK 版本
-          add-to-path: true
+    - name: Setup MSYS2 / MinGW64 完整工具链
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: mingw64
+        update: true
+        install: >-
+          mingw-w64-x86_64-toolchain
+          git
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y make gcc g++ libssl-dev
+    - name: 修复 libnt 指针类型不兼容
+      run: |
+        sed -i 's/DWORD64 dldisp/DWORD dldisp/g' libnt/libnt.c
 
-      - name: Build magiskboot
-        run: |
-          # 尝试检测构建系统，优先使用 ndk-build
-          if [ -f "Android.mk" ] || [ -f "jni/Android.mk" ]; then
-            echo "Using ndk-build"
-            ndk-build -j$(nproc)
-          elif [ -f "CMakeLists.txt" ]; then
-            echo "Using CMake"
-            mkdir -p build && cd build
-            cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-                  -DANDROID_ABI=arm64-v8a \
-                  -DANDROID_PLATFORM=android-23 \
-                  ..
-            make -j$(nproc)
-          elif [ -f "Makefile" ]; then
-            echo "Using Makefile"
-            make -j$(nproc) \
-              CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android23-clang \
-              CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android23-clang++ \
-              AR=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar \
-              LD=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/ld.lld \
-              STRIP=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip
-          else
-            echo "No recognized build system found"
-            exit 1
-          fi
+    - name: 构建（强制使用 GCC 编译器）
+      run: |
+        CC=gcc CXX=g++ mingw32-make
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: magiskboot-binary
-          path: |
-            magiskboot
-            **/magiskboot
-            **/*.so
-            **/*.a
-          if-no-files-found: warn
+    - name: 收集构建产物
+      run: |
+        mkdir -p release
+        cp out/magiskboot.exe release/
+
+    - name: 上传构建产物
+      uses: actions/upload-artifact@v4
+      with:
+        name: magiskboot-windows-x64
+        path: release/*
+
+    - name: 打标签自动发布
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: release/*
+        generate_release_notes: true
