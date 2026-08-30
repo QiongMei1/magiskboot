@@ -24,38 +24,35 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Setup MSYS2 / MinGW64 GCC
+    - name: Setup MSYS2 / MinGW64 完整工具链
       uses: msys2/setup-msys2@v2
       with:
         msystem: mingw64
         update: true
         install: >-
-          mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-binutils
-          make
+          mingw-w64-x86_64-toolchain
           git
 
-    - name: Fix libnt pointer type warning
+    - name: Fix libnt 指针类型警告
       run: |
-        # 修复 SymGetLineFromAddr64 参数类型，消除指针不兼容警告
         sed -i 's/DWORD64 dldisp/DWORD dldisp/g' libnt/libnt.c
 
     - name: Build
       run: |
         mingw32-make
 
-    - name: Collect artifacts
+    - name: 收集构建产物
       run: |
         mkdir -p release
         cp out/magiskboot.exe release/
 
-    - name: Upload build artifacts
+    - name: 上传构建产物
       uses: actions/upload-artifact@v4
       with:
         name: magiskboot-windows-x64
         path: release/*
 
-    - name: Create release on tag
+    - name: 打标签自动发布
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
